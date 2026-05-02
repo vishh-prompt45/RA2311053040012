@@ -1,21 +1,12 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import {
-  Card,
-  CardContent,
-  Typography,
-  Select,
-  MenuItem,
-  CircularProgress,
-  Box
-} from "@mui/material";
+import "./App.css";
 
 export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState("All");
-  const [loading, setLoading] = useState(true);
 
-  // ✅ Get fresh token every time
+  // 🔑 get token
   const getToken = async () => {
     const res = await axios.post(
       "http://20.207.122.201/evaluation-service/auth",
@@ -28,11 +19,9 @@ export default function App() {
         clientSecret: "JxTBxBbKFRnRVJTY"
       }
     );
-
     return res.data.access_token;
   };
 
-  // ✅ Logging middleware
   const log = async (message, token) => {
     try {
       await axios.post(
@@ -44,65 +33,48 @@ export default function App() {
           message
         },
         {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
-    } catch (err) {
-      console.error("log failed");
-    }
+    } catch {}
   };
 
-  // ✅ Weight logic
   const getWeight = (type) => {
     if (type === "Placement") return 3;
     if (type === "Result") return 2;
     return 1;
   };
 
-  // ✅ Fetch notifications
   const fetchNotifications = async () => {
-    try {
-      setLoading(true);
+    const token = await getToken();
 
-      const token = await getToken();
+    await log("Fetching notifications", token);
 
-      await log("Fetching notifications", token);
+    const res = await axios.get(
+      "http://20.207.122.201/evaluation-service/notifications",
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
 
-      const res = await axios.get(
-        "http://20.207.122.201/evaluation-service/notifications",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+    const data = res.data.notifications;
 
-      const data = res.data.notifications;
-
-      const scored = data.map((n) => ({
+    const sorted = data
+      .map((n) => ({
         ...n,
         score: getWeight(n.Type) + new Date(n.Timestamp).getTime()
-      }));
+      }))
+      .sort((a, b) => b.score - a.score);
 
-      const sorted = scored.sort((a, b) => b.score - a.score);
+    setNotifications(sorted);
 
-      setNotifications(sorted);
-
-      await log("Notifications loaded", token);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    await log("Loaded notifications", token);
   };
 
   useEffect(() => {
     fetchNotifications();
   }, []);
 
-  // ✅ Filter
   const filtered =
     filter === "All"
       ? notifications
@@ -110,63 +82,57 @@ export default function App() {
 
   const top10 = notifications.slice(0, 10);
 
+  // 🕒 Date + Time
+  const now = new Date();
+  const date = now.toDateString();
+  const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
   return (
-    <Box sx={{ padding: 4, background: "#0f172a", minHeight: "100vh" }}>
-      <Typography variant="h3" color="white" gutterBottom>
-        Campus Notifications
-      </Typography>
+    <div className="container">
+      {/* HEADER */}
+      <div className="header">
+        <div>{date}</div>
+        <h1>Campus Notifier</h1>
+        <div>{time}</div>
+      </div>
 
-      {/* Filter */}
-      <Typography variant="h6" color="white">
-        Filter
-      </Typography>
-      <Select
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        sx={{ background: "white", mb: 3 }}
-      >
-        <MenuItem value="All">All</MenuItem>
-        <MenuItem value="Event">Event</MenuItem>
-        <MenuItem value="Result">Result</MenuItem>
-        <MenuItem value="Placement">Placement</MenuItem>
-      </Select>
-
-      {/* Loading */}
-      {loading ? (
-        <CircularProgress />
-      ) : (
-        <>
-          {/* Top 10 */}
-          <Typography variant="h5" color="white" mt={2}>
-            Top 10 Priority Notifications
-          </Typography>
+      {/* MAIN */}
+      <div className="main">
+        {/* LEFT */}
+        <div className="box">
+          <h2>Top 10 notifications</h2>
 
           {top10.map((n) => (
-            <Card key={n.ID} sx={{ my: 1 }}>
-              <CardContent>
-                <Typography variant="h6">{n.Type}</Typography>
-                <Typography>{n.Message}</Typography>
-                <Typography variant="caption">{n.Timestamp}</Typography>
-              </CardContent>
-            </Card>
+            <div key={n.ID} className="card">
+              <b>{n.Type}</b>
+              <p>{n.Message}</p>
+              <small>{n.Timestamp}</small>
+            </div>
           ))}
+        </div>
 
-          {/* All */}
-          <Typography variant="h5" color="white" mt={3}>
-            All Notifications
-          </Typography>
+        {/* RIGHT */}
+        <div className="box">
+          <div className="top-bar">
+            <h2>All notifications</h2>
+
+            <select onChange={(e) => setFilter(e.target.value)}>
+              <option>All</option>
+              <option>Event</option>
+              <option>Result</option>
+              <option>Placement</option>
+            </select>
+          </div>
 
           {filtered.map((n) => (
-            <Card key={n.ID} sx={{ my: 1 }}>
-              <CardContent>
-                <Typography variant="h6">{n.Type}</Typography>
-                <Typography>{n.Message}</Typography>
-                <Typography variant="caption">{n.Timestamp}</Typography>
-              </CardContent>
-            </Card>
+            <div key={n.ID} className="card">
+              <b>{n.Type}</b>
+              <p>{n.Message}</p>
+              <small>{n.Timestamp}</small>
+            </div>
           ))}
-        </>
-      )}
-    </Box>
+        </div>
+      </div>
+    </div>
   );
 }
