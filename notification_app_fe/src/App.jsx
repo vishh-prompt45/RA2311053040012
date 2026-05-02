@@ -1,19 +1,39 @@
+import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   Card,
   CardContent,
   Typography,
   Select,
-  MenuItem
+  MenuItem,
+  CircularProgress,
+  Box
 } from "@mui/material";
-import axios from "axios";
-
-const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJNYXBDbGFpbXMiOnsiYXVkIjoiaHR0cDovLzIwLjI0NC41Ni4xNDQvZXZhbHVhdGlvbi1zZXJ2aWNlIiwiZW1haWwiOiJ2cDgxODBAc3JtaXN0LmVkdS5pbiIsImV4cCI6MTc3NzcwNDQyNSwiaWF0IjoxNzc3NzAzNTI1LCJpc3MiOiJBZmZvcmQgTWVkaWNhbCBUZWNobm9sb2dpZXMgUHJpdmF0ZSBMaW1pdGVkIiwianRpIjoiNzdkNjE5MzAtZWU4Zi00NWU5LWE3ZDQtOWY0OTBmYjRkZGQ0IiwibG9jYWxlIjoiZW4tSU4iLCJuYW1lIjoidmlzaHZhIHBhcmlzaGFkIHYgYiIsInN1YiI6IjgzZGJmZmEwLWZjODctNGRhNy05NTNlLTc5MDE1MmZkODZjZiJ9LCJlbWFpbCI6InZwODE4MEBzcm1pc3QuZWR1LmluIiwibmFtZSI6InZpc2h2YSBwYXJpc2hhZCB2IGIiLCJyb2xsTm8iOiJyYTIzMTEwNTMwNDAwMTIiLCJhY2Nlc3NDb2RlIjoiUWticHhIIiwiY2xpZW50SUQiOiI4M2RiZmZhMC1mYzg3LTRkYTctOTUzZS03OTAxNTJmZDg2Y2YiLCJjbGllbnRTZWNyZXQiOiJKeFRCeEJiS0ZSblJWSlRZIn0.LMfHldfr59IGLjX2TClsDBxnIOXvjSN0WR0IcKLhfTw";
 
 export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
 
-  const log = async (message) => {
+  // ✅ Get fresh token every time
+  const getToken = async () => {
+    const res = await axios.post(
+      "http://20.207.122.201/evaluation-service/auth",
+      {
+        email: "vp8180@srmist.edu.in",
+        name: "Vishva Parishad V B",
+        rollNo: "RA2311053040012",
+        accessCode: "QkbpxH",
+        clientID: "83dbffa0-fc87-4da7-953e-790152fd86cf",
+        clientSecret: "JxTBxBbKFRnRVJTY"
+      }
+    );
+
+    return res.data.access_token;
+  };
+
+  // ✅ Logging middleware
+  const log = async (message, token) => {
     try {
       await axios.post(
         "http://20.207.122.201/evaluation-service/logs",
@@ -25,7 +45,7 @@ export default function App() {
         },
         {
           headers: {
-            Authorization: `Bearer ${TOKEN}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
@@ -34,28 +54,34 @@ export default function App() {
     }
   };
 
+  // ✅ Weight logic
   const getWeight = (type) => {
     if (type === "Placement") return 3;
     if (type === "Result") return 2;
     return 1;
   };
 
+  // ✅ Fetch notifications
   const fetchNotifications = async () => {
     try {
-      log("Fetching notifications");
+      setLoading(true);
+
+      const token = await getToken();
+
+      await log("Fetching notifications", token);
 
       const res = await axios.get(
         "http://20.207.122.201/evaluation-service/notifications",
         {
           headers: {
-            Authorization: `Bearer ${TOKEN}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
 
       const data = res.data.notifications;
 
-      const scored = data.map(n => ({
+      const scored = data.map((n) => ({
         ...n,
         score: getWeight(n.Type) + new Date(n.Timestamp).getTime()
       }));
@@ -63,10 +89,12 @@ export default function App() {
       const sorted = scored.sort((a, b) => b.score - a.score);
 
       setNotifications(sorted);
-      log("Notifications loaded");
 
+      await log("Notifications loaded", token);
     } catch (err) {
-      log("Error fetching notifications");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -74,58 +102,71 @@ export default function App() {
     fetchNotifications();
   }, []);
 
+  // ✅ Filter
   const filtered =
     filter === "All"
       ? notifications
-      : notifications.filter(n => n.Type === filter);
+      : notifications.filter((n) => n.Type === filter);
 
   const top10 = notifications.slice(0, 10);
 
   return (
-    <div style={{ padding: "20px" }}>
-  <Typography variant="h3">Campus Notifications</Typography>
+    <Box sx={{ padding: 4, background: "#0f172a", minHeight: "100vh" }}>
+      <Typography variant="h3" color="white" gutterBottom>
+        Campus Notifications
+      </Typography>
 
-  <Typography variant="h5">Filter</Typography>
-  <Select
-    value={filter}
-    onChange={(e) => {
-      setFilter(e.target.value);
-      log("Filter changed");
-    }}
-  >
-    <MenuItem value="All">All</MenuItem>
-    <MenuItem value="Event">Event</MenuItem>
-    <MenuItem value="Result">Result</MenuItem>
-    <MenuItem value="Placement">Placement</MenuItem>
-  </Select>
+      {/* Filter */}
+      <Typography variant="h6" color="white">
+        Filter
+      </Typography>
+      <Select
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        sx={{ background: "white", mb: 3 }}
+      >
+        <MenuItem value="All">All</MenuItem>
+        <MenuItem value="Event">Event</MenuItem>
+        <MenuItem value="Result">Result</MenuItem>
+        <MenuItem value="Placement">Placement</MenuItem>
+      </Select>
 
-  <Typography variant="h5" style={{ marginTop: "20px" }}>
-    Top 10 Priority Notifications
-  </Typography>
+      {/* Loading */}
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <>
+          {/* Top 10 */}
+          <Typography variant="h5" color="white" mt={2}>
+            Top 10 Priority Notifications
+          </Typography>
 
-  {top10.map((n) => (
-    <Card key={n.ID} style={{ margin: "10px 0" }}>
-      <CardContent>
-        <Typography variant="h6">{n.Type}</Typography>
-        <Typography>{n.Message}</Typography>
-        <Typography variant="caption">{n.Timestamp}</Typography>
-      </CardContent>
-    </Card>
-  ))}
+          {top10.map((n) => (
+            <Card key={n.ID} sx={{ my: 1 }}>
+              <CardContent>
+                <Typography variant="h6">{n.Type}</Typography>
+                <Typography>{n.Message}</Typography>
+                <Typography variant="caption">{n.Timestamp}</Typography>
+              </CardContent>
+            </Card>
+          ))}
 
-  <Typography variant="h5" style={{ marginTop: "20px" }}>
-    All Notifications
-  </Typography>
+          {/* All */}
+          <Typography variant="h5" color="white" mt={3}>
+            All Notifications
+          </Typography>
 
-  {filtered.map((n) => (
-    <Card key={n.ID} style={{ margin: "10px 0" }}>
-      <CardContent>
-        <Typography variant="h6">{n.Type}</Typography>
-        <Typography>{n.Message}</Typography>
-        <Typography variant="caption">{n.Timestamp}</Typography>
-      </CardContent>
-    </Card>
-  ))}
-</div>
+          {filtered.map((n) => (
+            <Card key={n.ID} sx={{ my: 1 }}>
+              <CardContent>
+                <Typography variant="h6">{n.Type}</Typography>
+                <Typography>{n.Message}</Typography>
+                <Typography variant="caption">{n.Timestamp}</Typography>
+              </CardContent>
+            </Card>
+          ))}
+        </>
+      )}
+    </Box>
   );
 }
